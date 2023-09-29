@@ -1,4 +1,5 @@
-# fodnet
+# FODNet
+
 FOD-Net reimplementation with training and inference pipeline. This module uses the FODNet model originally implemented [here](https://github.com/ruizengalways/FOD-Net).
 
 If you use this code for your research, please cite:
@@ -7,6 +8,7 @@ FOD-Net: A Deep Learning Method for Fiber Orientation Distribution Angular Super
 [Rui Zeng](https://sites.google.com/site/ruizenghomepage/), Jinglei Lv, He Wang, Luping Zhou, Michael Barnett, Fernando Calamante\*, Chenyu Wang\*. In [Medical Image Analysis](https://www.sciencedirect.com/science/article/abs/pii/S1361841522000822). (* equal contributions) [[Bibtex]](bib.txt).
 
 ## Requirements
+
 This module requires the following python packages:
 - `torch >= 2.0.0`
 - `lightning >= 2.0.0`
@@ -16,15 +18,18 @@ This module requires the following python packages:
 These will be installed upon installation of this package, however it is recommended to follow the instructions for installing PyTorch independently before installing this package, to ensure correct hardware optimizations are enabled.
 
 ## Installation
+
 ```
 pip install fodnet
 ```
 
 ## Training
+
 Follow the instructions below on how to train the FODNet model.
 
 
 ### Data Preprocessing
+
 This training pipeline requires data to be saved in `.npy` format. Additionally the spherical harmonic dimension must be the first dimension within each 4D array. This is because this module uses [npy-patcher](https://github.com/m-lyon/npy-cpp-patches) to extract training patches at runtime. Below is an example on how to convert `NIfTI` files into `.npy` using [nibabel](https://nipy.org/nibabel/).
 
 ```python
@@ -40,6 +45,7 @@ np.save('/path/to/fod.npy', data, allow_pickle=False)  # Save in npy format. Ens
 **N.B.** *Training patches are read lazily from disk, therefore it is **highly** recommended to store the training data on an SSD type device, as an HDD will bottleneck the training process when data loading.*
 
 ### Training
+
 ```python
 import lightning.pytorch as pl
 
@@ -88,7 +94,6 @@ class MyCustomModel(FODNetLightningModel):
         optimizer = torch.optim.SGD(self.parameters(), lr=1e-5)
         return optimizer
 ```
-
 
 ### Prediction
 
