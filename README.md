@@ -15,6 +15,9 @@ This module requires the following python packages:
 - `numpy`
 - `einops`
 - `npy-patcher`
+- `scikit-image`
+- `nibabel`
+
 These will be installed upon installation of this package, however it is recommended to follow the instructions for installing PyTorch independently before installing this package, to ensure correct hardware optimizations are enabled.
 
 ## Installation
@@ -42,7 +45,7 @@ data = data.transpose(3, 0, 1, 2)  # Move the SH dimension to 0
 np.save('/path/to/fod.npy', data, allow_pickle=False)  # Save in npy format. Ensure this is on an SSD.
 ```
 
-**N.B.** *Training patches are read lazily from disk, therefore it is **highly** recommended to store the training data on an SSD type device, as an HDD will bottleneck the training process when data loading.*
+**N.B.** *Patches are read lazily from disk, therefore it is **highly** recommended to store the training data on an SSD type device, as an HDD will bottleneck the training process when data loading.*
 
 ### Training
 
@@ -95,6 +98,21 @@ class MyCustomModel(FODNetLightningModel):
         return optimizer
 ```
 
-### Prediction
+## Prediction
 
-Coming soon.
+```python
+from fodnet.core.model import FODNetLightningModel
+from fodnet.core.prediction import FODNetPredictionProcessor
+
+model = FODNetLightningModel.load_from_checkpoint('/path/to/my/checkpoint.ckpt')
+predict = FODNetPredictionProcessor(batch_size=32, num_workers=8, accelerator='gpu')
+predict.run_subject(
+    model,
+    '/path/to/my/brainmask.nii.gz',
+    '/path/to/lowres_fod.nii.gz',
+    '/path/to/dest/highres_fod.nii.gz',
+    tmp_dir=None,  # Optionally specify a temporary directory to save the FOD file during processing
+)
+```
+
+**N.B.** *Patches are read lazily from disk, therefore it is recommended to ensure `tmp_dir` is on an SSD type device.*

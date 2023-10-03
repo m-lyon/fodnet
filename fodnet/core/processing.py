@@ -2,11 +2,13 @@
 
 import math
 import warnings
-from typing import Tuple, Optional
+from pathlib import Path
+from typing import Tuple, Optional, Dict, Any
 
 import numpy as np
 import einops as ein
 
+from skimage.util import view_as_windows
 from npy_patcher import PatcherFloat  # pylint: disable=no-name-in-module
 
 
@@ -62,6 +64,17 @@ def get_padding(
     return padding
 
 
+def get_same_padding(patch_shape: Tuple[int, ...]) -> Tuple[Tuple[int, int], ...]:
+    '''Same padding, only implemeneted for stride of 1'''
+    padding = []
+    for size in patch_shape:
+        total = size - 1
+        left = total // 2
+        right = total - left
+        padding.append((left, right))
+    return tuple(padding)
+
+
 def apply_padding(data_array: np.ndarray, padding: Tuple[Tuple[int, int], ...]) -> np.ndarray:
     '''Applies padding to data array.
 
@@ -85,7 +98,7 @@ def apply_padding(data_array: np.ndarray, padding: Tuple[Tuple[int, int], ...]) 
     return data_array
 
 
-class Patcher:
+class TrainingPatcher:
     '''Wrapper class for C++ patcher object'''
 
     def __init__(self, patch_shape: Tuple[int, ...]) -> None:
@@ -116,3 +129,128 @@ class Patcher:
         patch_index = np.arange(len(mask), dtype=np.int32)[mask_filter]
 
         return patch_index
+
+
+class PredictionPatcher:
+    '''Patcher for FODNet Prediction processing'''
+
+    @staticmethod
+    def _extract_unused_voxels(fod_lr: Path, mask_filter: np.ndarray, orig_shape: Tuple[int, ...]):
+        '''Extracts unused voxels from npy file'''
+        fod: np.ndarray = np.load(fod_lr, allow_pickle=False)
+        fod = fod.transpose(1, 2, 3, 0)
+        fod = fod.reshape(math.prod(orig_shape), 45)
+        fod = fod[~mask_filter, :]
+        return fod
+
+    @staticmethod
+    def _get_mask_filter(mask: np.ndarray, patch_shape: Tuple[int, ...]):
+        # pylint: disable=arguments-differ
+
+        # Get padding
+        padding = get_same_padding(patch_shape)
+
+        # Pad mask
+        mask = apply_padding(mask, padding)
+
+        # Rearrange mask
+        mask = view_as_windows(mask, patch_shape, 1)
+        mask = ein.rearrange(mask, 'mx nx ox m n o -> (mx nx ox) m n o')
+
+        # Filter out patches that are not contained within brain mask
+        mask_filter = np.sum(mask, (1, 2, 3), dtype=bool)
+
+        # Apply filer to mask
+        mask = mask[mask_filter, ...]
+
+        return mask, mask_filter, padding
+
+    @staticmethod
+    def _get_filter_order(mask_filter: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        idx_pos = np.arange(len(mask_filter))[mask_filter]
+        idx_neg = np.arange(len(mask_filter))[~mask_filter]
+        order = np.argsort(np.concatenate([idx_neg, idx_pos]))
+
+        return order, idx_neg
+
+    @classmethod
+    def forward(
+        cls,
+        dataset: Dict[str, Any],
+        context: Dict[str, Any],
+        patch_shape: Tuple[int, int, int] = (9, 9, 9),
+    ):
+        '''Slices data into patches with a stride of 1 in each dim.
+
+        Args:
+            datasets (Dict[str,Any]):
+                'mask': (np.ndarray) -> shape (i, j, k)
+                ...
+            context (Dict[str,Any]):
+                ...
+            patch_shape: Patch shape
+
+        Modifies:
+            datasets (Dict[str,Any]):
+                + 'mask_filter': (np.ndarray) -> shape (N,)
+                + 'padding': (Tuple[Tuple[int,int], ...])
+                    shape -> (padi1, padi2), (padj1, padj), (padk1, padk2)
+                ...
+
+            context (Dict[str,Any]):
+                + 'orig_shape': (Tuple[int,int,int]) -> i, j, k
+                ...
+        '''
+        # pylint: disable=invalid-name
+        print('Slicing data into 3D patches...')
+        context['orig_shape'] = dataset['mask'].shape
+
+        # Get mask filter & slice
+        _, dataset['mask_filter'], dataset['padding'] = cls._get_mask_filter(
+            dataset['mask'], patch_shape
+        )
+
+    @classmethod
+    def backward(cls, dataset: Dict[str, Any], context: Dict[str, Any]):
+        '''Combines 3D patches into 3D whole volumes
+
+        Args:
+            datasets (Dict[str,Any]):
+                'fod_lr': (Path) -> filepath to fod lowres
+                'fod_hr': (np.ndarray) -> shape (X, 45)
+                'mask_filter': (np.ndarray) -> shape (N,)
+                'padding': (Tuple[Tuple[int,int,int]])
+                    shape -> (padi1, padi2), (padj1, padj), (padk1, padk2)
+
+            context (Dict[str,Any]):
+                'orig_shape': (Tuple[int,int,int]) -> i, j, k
+                ...
+
+        Modifies:
+            datasets (Dict[str,Any]):
+                ~ 'fod_hr': (np.ndarray) -> shape (i, j, k, 45)
+                - 'mask_filter': (np.ndarray) -> shape (N,)
+                - 'padding': (Tuple[Tuple[int,int,int]])
+                    shape -> (padi1, padi2), (padj1, padj), (padk1, padk2)
+
+            context (Dict[str,Any]):
+                - 'orig_shape': (Tuple[int,int,int]) -> i, j, k
+                ...
+        '''
+        print('Combining 3D patches into contiguous volumes...')
+        orig_shape, mask_filter = context.pop('orig_shape'), dataset.pop('mask_filter')
+        del dataset['padding']
+
+        # extract original voxels
+        unused_voxels = cls._extract_unused_voxels(dataset['fod_lr'], mask_filter, orig_shape)
+
+        order, _ = cls._get_filter_order(mask_filter)
+
+        # Append real data to original background
+        dataset['fod_hr'] = np.concatenate([unused_voxels, dataset['fod_hr']], axis=0)
+
+        # Re-order patches
+        dataset['fod_hr'] = dataset['fod_hr'][order, ...]
+
+        # Recombine
+        dataset['fod_hr'] = dataset['fod_hr'].reshape(*orig_shape, 45)

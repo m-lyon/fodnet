@@ -1,4 +1,5 @@
 '''Processing dataset classes'''
+
 from dataclasses import dataclass
 from typing import Tuple, Dict, Any, Union, List
 
@@ -7,8 +8,10 @@ from pathlib import Path
 import numpy as np
 import lightning.pytorch as pl
 
+from npy_patcher import PatcherFloat  # pylint: disable=no-name-in-module
+
 from torch.utils.data import Dataset, DataLoader
-from fodnet.core.processing import Patcher
+from fodnet.core.processing import TrainingPatcher
 
 
 @dataclass
@@ -26,7 +29,7 @@ class Subject:
                 raise OSError(f'{fpath} does not exist.')
 
 
-class FODNetDataset(Dataset):
+class FODNetTrainingDataset(Dataset):
     '''FOD-Net Dataset'''
 
     def __init__(self, subjects: Union[List[Subject], Tuple[Subject, ...]]):
@@ -36,7 +39,7 @@ class FODNetDataset(Dataset):
             subjects: Subject dataclasses
         '''
         super().__init__()
-        self.patcher = Patcher((9, 9, 9))
+        self.patcher = TrainingPatcher((9, 9, 9))
         self.subjects = subjects
         self._total_len = 0
         self._total_index: np.ndarray
@@ -121,7 +124,7 @@ class FODNetDataModule(pl.LightningDataModule):
         '''This is run on each GPU'''
         if stage in (None, 'fit'):
             self._train_dataloader = DataLoader(
-                FODNetDataset(self.train_subjects),
+                FODNetTrainingDataset(self.train_subjects),
                 self.batch_size,
                 shuffle=True,
                 pin_memory=True,
@@ -129,7 +132,7 @@ class FODNetDataModule(pl.LightningDataModule):
                 drop_last=True,
             )
             self._val_dataloader = DataLoader(
-                FODNetDataset(self.val_subjects),
+                FODNetTrainingDataset(self.val_subjects),
                 self.batch_size,
                 shuffle=False,
                 pin_memory=True,
@@ -142,3 +145,52 @@ class FODNetDataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         return self._val_dataloader
+
+
+class FODNetPredictDataset(Dataset):
+    '''Dataset for FODNet Prediction'''
+
+    def __init__(
+        self,
+        fod_lr: Path,
+        mask_filter: np.ndarray,
+        padding: Tuple[Tuple[int, int], ...],
+    ):
+        '''Initialises dataloader class
+
+        Args:
+            fod_lr: filepath to NumPy FOD
+            mask_filter: shape -> (N,)
+            strides: strides to extract patches
+        '''
+        super().__init__()
+        self.fod_lr = fod_lr
+        self.mask_filter = mask_filter
+        self.patch_shape = (9, 9, 9)
+        self.padding = tuple(item for tup in padding for item in tup)
+        self._patcher = PatcherFloat()
+        self._strides = (1,) * len(self.patch_shape)
+        self._patch_idx = np.arange(len(self.mask_filter))[mask_filter]
+        self._sph_idx = tuple(range(45))
+        self._full_patch_shape = (len(self._sph_idx),) + self.patch_shape
+        self._len = abs(np.sum(mask_filter.astype(int)))
+
+    def _get_patch(self, idx: int):
+        '''Extracts patch from FOD npy file'''
+        pnum = self._patch_idx[idx]
+        patch = self._patcher.get_patch(
+            str(self.fod_lr),
+            self._sph_idx,
+            self.patch_shape,
+            self._strides,
+            pnum,
+            padding=self.padding,
+        )
+        patch = np.array(patch, dtype=np.float32).reshape(self._full_patch_shape)
+        return patch
+
+    def __len__(self):
+        return self._len
+
+    def __getitem__(self, idx: int) -> np.ndarray:
+        return self._get_patch(idx)
