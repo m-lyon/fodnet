@@ -113,25 +113,15 @@ class FODNetPredictionProcessor:
         tmp_dir: Optional[Union[str, Path]] = None,
     ):
         '''Runs subject through preprocessing, model inference, and postprocessing.
-        Optionally save data to disk.
 
         Args:
-            model (torch.nn.Module): Initialised PyTorch model
-            fpaths (Tuple[str,str,str,str]): Tuple of dMRI fpath data.
-                (dmri_fpath, bvec_fpath, bval_fpath, mask_fpath)
-            save_str (str): Path to save combined data, should be a directory path
-                and a file prefix.
-                Default: Do not save (None).
-
-        Returns:
-            datasets (Dict[str,Any]):
-                'dmri': (np.ndarray) -> shape (i, j, k, b)
-                'bvec': (np.ndarray) -> shape (3, b)
-                'bval': (np.ndarray) -> shape (b,)
-                'mask': (np.ndarray) -> shape (i, j, k)
-            context (Dict[str,Any]):
-                'affine': (np.ndarray) -> shape (4, 4)
-                'shell_keys': (np.ndarray) -> shape (b,)
+            model: Initialised PyTorch Lightning model
+            mask: Path to NIfTI brain mask file
+            fod_lr: Path to NIfTI Low-res FOD file
+            out_fpath: Path to save output NIfTI file to
+            tmp_dir: Path to temporary directory to save FOD file during
+                processing, this should be using an SSD if possible. Defaults to using `tempfile`
+                module to create a temporary directory.
         '''
         # Load data
         dataset, context = self.load_dataset(mask, fod_lr, tmp_dir)
