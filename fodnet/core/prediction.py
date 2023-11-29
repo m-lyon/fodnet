@@ -20,13 +20,13 @@ from fodnet.core.dataset import FODNetPredictDataset
 class FODNetPredictionProcessor:
     '''FODNet Test Set Processor'''
 
-    def __init__(self, batch_size=4, num_workers=8, accelerator='gpu'):
+    def __init__(self, batch_size: int = 4, num_workers: int = 8, accelerator: str = 'gpu'):
         '''Initializes processor object
 
         Args:
-            batch_size (int): Batch size for prediction
-            num_workers (int): Number of CPU workers for dataloader
-            accelerator (str): Accelerator to use for prediction, either 'gpu' or 'cpu'.
+            batch_size: Batch size for prediction
+            num_workers: Number of CPU workers for dataloader
+            accelerator: Accelerator to use for prediction, either 'gpu' or 'cpu'.
         '''
         self.bsize = batch_size
         self.patch_shape = (9, 9, 9)
@@ -43,9 +43,9 @@ class FODNetPredictionProcessor:
         '''Loads dataset into data dict
 
         Args:
-            mask (Union[str,Path]): Path to NIfTI brain mask file
-            fod_lr (Union[str,Path]): Path to NIfTI Low-res FOD file
-            tmp_dir (Union[str,Path]): Path to temporary directory to save FOD file during
+            mask: Path to NIfTI brain mask file
+            fod_lr: Path to NIfTI Low-res FOD file
+            tmp_dir: Path to temporary directory to save FOD file during
                 processing, this should be using an SSD if possible. Defaults to using `tempfile`
                 module to create a temporary directory.
 
@@ -70,7 +70,12 @@ class FODNetPredictionProcessor:
 
         return {'fod_lr': fod_fpath, 'mask': mask_data}, {'affine': affine}
 
-    def save_dataset(self, datasets, context, out_fpath: Union[str, Path]):
+    def save_dataset(
+        self,
+        datasets: Dict[str, Any],
+        context: Dict[str, Any],
+        out_fpath: Union[str, Path],
+    ) -> None:
         '''Saves dataset to disk'''
         if self._tmpdir is not None and self._tmpdir.exists():
             shutil.rmtree(self._tmpdir)
@@ -78,7 +83,7 @@ class FODNetPredictionProcessor:
             datasets['fod_lr'].unlink()
         save_nifti(datasets['fod_hr'], context['affine'], out_fpath)
 
-    def run_model(self, dataset: Dict[str, Any], model: pl.LightningModule):
+    def run_model(self, dataset: Dict[str, Any], model: pl.LightningModule) -> None:
         '''Runs model through inference to produce dMRI outputs
 
         Args:
@@ -111,7 +116,7 @@ class FODNetPredictionProcessor:
         fod_lr: Union[str, Path],
         out_fpath: Union[str, Path],
         tmp_dir: Optional[Union[str, Path]] = None,
-    ):
+    ) -> None:
         '''Runs subject through preprocessing, model inference, and postprocessing.
 
         Args:

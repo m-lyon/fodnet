@@ -9,7 +9,7 @@ FOD-Net: A Deep Learning Method for Fiber Orientation Distribution Angular Super
 
 ## Requirements
 
-This module requires the following python packages:
+This module requires the following Python packages:
 - `torch >= 2.0.0`
 - `lightning >= 2.0.0`
 - `numpy`
@@ -18,7 +18,7 @@ This module requires the following python packages:
 - `scikit-image`
 - `nibabel`
 
-These will be installed upon installation of this package, however it is recommended to follow the instructions for installing PyTorch independently before installing this package, to ensure correct hardware optimizations are enabled.
+These will be installed upon installation of this package, however, it is recommended to follow the instructions for installing PyTorch independently before installing this package, to ensure correct hardware optimizations are enabled.
 
 ## Installation
 
@@ -30,10 +30,9 @@ pip install fodnet
 
 Follow the instructions below on how to train the FODNet model.
 
-
 ### Data Preprocessing
 
-This training pipeline requires data to be saved in `.npy` format. Additionally the spherical harmonic dimension must be the first dimension within each 4D array. This is because this module uses [npy-patcher](https://github.com/m-lyon/npy-cpp-patches) to extract training patches at runtime. Below is an example on how to convert `NIfTI` files into `.npy` using [nibabel](https://nipy.org/nibabel/).
+This training pipeline requires data to be saved in `.npy` format. Additionally, the spherical harmonic dimension must be the first dimension within each 4D array. This is because this module uses [npy-patcher](https://github.com/m-lyon/npy-cpp-patches) to extract training patches at runtime. Below is an example of how to convert `NIfTI` files into `.npy` using [nibabel](https://nipy.org/nibabel/).
 
 ```python
 import numpy as np
@@ -80,7 +79,7 @@ trainer.fit(model, data_module)
 
 #### Customization
 
-This implemenation uses a different training optimizer, loss, and learning rate than that used in the [original implementation](https://github.com/ruizengalways/FOD-Net). In particular we use `AdamW`, `L1 Loss`, and `0.003` respectively.
+This implementation uses a different training optimizer, loss, and learning rate than that used in the [original implementation](https://github.com/ruizengalways/FOD-Net). In particular, we use `AdamW`, `L1 Loss`, and `0.003` respectively.
 
 Changing these hyperparameters is straightforward. Simply create a new class that inherits the `FODNetLightningModel`, and modify the properties/methods below. Use this class instead of `FODNetLightningModel` when training.
 
